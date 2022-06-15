@@ -1,5 +1,5 @@
 import os
-
+from stqdm import stqdm
 import numpy as np
 import cv2 as cv
 import pandas as pd
@@ -28,8 +28,8 @@ class ImgData(Dataset):
     def __getitem__(self, item):
         img = Image.open(os.path.join(self.file_dir, self.file_names[item]))
         images = [img.rotate(45 * i) for i in range(8)]
-        images = [self.transform(img) for img in images]
-        images = torch.FloatTensor(images)
+        images = [torch.unsqueeze(self.transform(img), dim=0) for img in images]
+        images = torch.cat(images)
         return images
 
 
@@ -114,13 +114,12 @@ def get_model(model_name):
         return model
 
 
-def classify_cell(model, data, slide, contours):
-    data = SlideData(slide=slide, contours=contours)
+def classify_cell(model, data):
     softmax = torch.nn.Softmax(dim=1)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     voted_predict = []
     with torch.no_grad():
-        for batch in data:
+        for batch in stqdm(data, desc=f"Девайс: {device}. Прогресс выполнения"):
             batch = batch.to(device)
             predict = softmax(model(batch))
             predict = predict.data.cpu().numpy()
@@ -139,5 +138,5 @@ def get_data(slide_path=None, counter_path=None, img_folder_path=None):
         return SlideData(slide=slide, contours=counters)
 
     if img_folder_path is not None:
-        img_names = os.listdir(img_folder_path)
-        return ImgData(file_names=img_names, file_dir=img_names)
+        img_names = [name for name in os.listdir(img_folder_path) if ".png" in name]
+        return ImgData(file_names=img_names, file_dir=img_folder_path)
