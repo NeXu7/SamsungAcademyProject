@@ -20,7 +20,7 @@ if load_file:
     uploaded_file = st.file_uploader("Choose a file")
 
 if uploaded_file is not None:
-    uploaded_file = pd.read_json(uploaded_file).iloc[:10]
+    uploaded_file = pd.read_json(uploaded_file)
     download_mask = uploaded_file.copy()
 
 
