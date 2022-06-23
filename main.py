@@ -31,6 +31,7 @@ if len(model_select) > 1:
         progress_bar = st.sidebar.progress(0)
         status_text = st.sidebar.empty()
         model = utils.get_model(model_select)
+        model.eval()
         data = utils.get_data(slide_path="slides/5189/TCGA-BP-5189-01Z-00-DX1.cfffe175-da76-4edd-9187-0570a877127b.svs",
                               counter_data=uploaded_file)
         result = utils.classify_cell(model, data)
