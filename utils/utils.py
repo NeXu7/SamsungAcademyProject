@@ -1,4 +1,6 @@
 import os
+
+import streamlit
 from stqdm import stqdm
 import numpy as np
 import cv2 as cv
@@ -35,7 +37,7 @@ class ImgData(Dataset):
 
 
 class SlideData(Dataset):
-    def __init__(self, slide, contours):
+    def __init__(self, slide, contours, x_offset, y_offset):
         self.slide = slide
         self.contours = contours
         mean = [0.65, 0.49, 0.64]
@@ -45,36 +47,43 @@ class SlideData(Dataset):
             transforms.Resize((128, 128)),
             transforms.Normalize(mean, std)
         ])
+        self.x_offset, self.y_offset = x_offset, y_offset
 
     def __len__(self):
         return len(self.contours)
 
     def __getitem__(self, item):
-        img = self.cell_mask(self.contours[item], self.slide, pix_around=10)
+        img = self.cell_mask(self.contours[item], pix_around=10)
         h, w, _ = img.shape
         top = (256 - h) // 2
         left = (256 - w) // 2
         img = cv.copyMakeBorder(img, top, top, left, left, cv.BORDER_CONSTANT, None, [0, 0, 0])
-        img_batch = [torch.unsqueeze(self.transform_img(img, i * 180, self.transform),
-                                     dim=0) for i in range(2)]
-        img_batch = torch.cat(img_batch)
-        return img_batch
+        cv.imwrite('temp.png', img)
+        img = Image.open('temp.png')
+        images = [img.rotate(i * 180) for i in range(2)]
+        images = [torch.unsqueeze(self.transform(img), dim=0) for img in images]
+        images = torch.cat(images)
+        # streamlit.image(img)
+        # img_batch = [torch.unsqueeze(self.transform_img(img, i*45, self.transform),
+        #                              dim=0) for i in range(8)]
+        # img_batch = torch.cat(img_batch)
+        return images
 
-    @staticmethod
-    def cell_mask(cell_cont, image, pix_around=10, x_offset=0, y_offset=0):
+    def cell_mask(self, cell_cont, pix_around=10):
         cell_cont = np.array(cell_cont)
         x_img, y_img, w, h = cv.boundingRect(cell_cont)
-        x = x_img - pix_around - x_offset
-        y = y_img - pix_around - y_offset
+        x = x_img - pix_around - self.x_offset
+        y = y_img - pix_around - self.y_offset
         w = w + 2 * pix_around
         h = h + 2 * pix_around
-        cell_img = image[y:y + h, x:x + w].copy()
+        cell_img = self.slide[y:y + h, x:x + w].copy()
         cell_cont = cell_cont - [x_img - pix_around, y_img - pix_around]
         mask = np.zeros(cell_img.shape[:2])
         mask = cv.drawContours(mask, cell_cont, -1, (1), -1) + cv.drawContours(mask, cell_cont, -1, (1),
                                                                                pix_around * 2)
         mask = mask >= 1
         cell_img[np.logical_not(mask)] = [0, 0, 0]
+
         return cell_img
 
     @staticmethod
@@ -93,11 +102,19 @@ def contour_ext(data):
 
 
 def get_model(model_name):
+    '''
+
+    :param model_name: name of model to be predictor
+    :return: prepared model
+    '''
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if model_name == "densenet121":
         model = models.densenet121(pretrained=False)
+        for param in model.parameters():
+            param.requires_grad = False
         model.classifier = torch.nn.Sequential(
             torch.nn.Linear(model.classifier.in_features, 500),
+            torch.nn.Dropout(p=0.2),
             torch.nn.Linear(500, 5)
         )
         model.load_state_dict(torch.load("models/densenet121.pt", map_location=device))
@@ -137,19 +154,27 @@ def classify_cell(model, data):
     return np.array(voted_predict)
 
 
-def get_data(slide_path=None, counter_data=None, img_folder_path=None):
-    if slide_path is not None and counter_data is not None:
+def get_data(slide_path=None, contour_data=None, img_folder_path=None):
+    """
+    create dataloader for prediction
+    :param slide_path: path to the WSI
+    :param contour_data: cells contour predicted with StarDirst in QuPath
+    :param img_folder_path: folder where to save images
+    :return: dataloader with images to predict
+    """
+    if slide_path is not None and contour_data is not None:
         X = []
         Y = []
-        for cont in counter_data:
+        for cont in contour_data:
             x, y, w, h = cv.boundingRect(cont)
             X.append(x)
             Y.append(y)
-        size = (np.min(X) - 200, np.min(Y) - 200, np.max(X) - np.min(X) + 200, np.max(Y) - np.min(Y) + 200)
+        size = (np.min(X) - 200, np.min(Y) - 200, np.max(X) - np.min(X) + 400, np.max(Y) - np.min(Y) + 400)
         slide = sio.open_slide(slide_path, 'SVS')
         scene = slide.get_scene(0)
         slide = scene.read_block(size)
-        return SlideData(slide=slide, contours=counter_data)
+        return SlideData(slide=slide, contours=contour_data,
+                         x_offset=size[0], y_offset=size[1])
 
     if img_folder_path is not None:
         img_names = [name for name in os.listdir(img_folder_path) if ".png" in name]
@@ -157,8 +182,14 @@ def get_data(slide_path=None, counter_data=None, img_folder_path=None):
 
 
 def make_predict_file(mask, predict):
+    """
+    Construct file with predictions for detected cells
+    :param mask:
+    :param predict:
+    :return:
+    """
     ccd = {4: 16711680, 0: 255, 2: 16776960, 3: 16737280, 1: 6618880}
-    for i in range(len(predict)):
+    for i in range(len(mask)):
         if predict[i, 0] > 0.3:
             mask.loc[i, 'properties']['classification'] = {'name': 0,
                                                            'colorRGB': ccd[0]
