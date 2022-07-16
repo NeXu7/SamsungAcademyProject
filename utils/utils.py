@@ -58,16 +58,15 @@ class SlideData(Dataset):
         top = (256 - h) // 2
         left = (256 - w) // 2
         img = cv.copyMakeBorder(img, top, top, left, left, cv.BORDER_CONSTANT, None, [0, 0, 0])
-        cv.imwrite('temp.png', img)
-        img = Image.open('temp.png')
-        images = [img.rotate(i * 180) for i in range(2)]
-        images = [torch.unsqueeze(self.transform(img), dim=0) for img in images]
-        images = torch.cat(images)
-        # streamlit.image(img)
-        # img_batch = [torch.unsqueeze(self.transform_img(img, i*45, self.transform),
-        #                              dim=0) for i in range(8)]
-        # img_batch = torch.cat(img_batch)
-        return images
+        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+        # images = [img.rotate(i * 180) for i in range(2)]
+        # images = [torch.unsqueeze(self.transform(img), dim=0) for img in images]
+        # images = torch.cat(images)
+        streamlit.image(img)
+        img_batch = [torch.unsqueeze(self.transform_img(img, i*45, self.transform),
+                                     dim=0) for i in range(8)]
+        img_batch = torch.cat(img_batch)
+        return img_batch
 
     def cell_mask(self, cell_cont, pix_around=10):
         cell_cont = np.array(cell_cont)
