@@ -12,8 +12,9 @@ model_select = st.selectbox(
     "Choose model architecture:",
     ["", "densenet121", "densenet201", "efficientnet_b0"]
 )
-model = utils.get_model(model_select)
-model.eval()
+if len(model_select) > 1:
+    model = utils.get_model(model_select)
+    model.eval()
 finish = False
 uploaded_file = None
 load_file = st.checkbox("Classification from geojson?", key=0)
