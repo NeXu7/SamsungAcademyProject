@@ -8,7 +8,7 @@ from csbdeep.utils import normalize
 
 
 def get_classifier():
-    model = models.densenet201(weights=None)
+    model = models.densenet121(weights=None)
     for param in model.parameters():
         param.requires_grad = False
     model.classifier = torch.nn.Sequential(
@@ -72,7 +72,7 @@ class RoiWorker:
     def predict(self, image):
         detections = self.predict_stardist(image)
         labels = self.predict_class(image, detections)
-        json_form = self.create_json(detections['coord'], labels)
+        json_form = self.create_json(detections["coord"], labels)
         return json_form
 
     @staticmethod
@@ -117,15 +117,13 @@ class RoiWorker:
                 if label != 4 or label != 0:
                     detection = np.rot90(detection, k=-1)
                     detection = detection.tolist()
-                    json_form.append({"label": label,
-                                      "detection": detection})
+                    json_form.append({"label": label, "detection": detection})
 
         return json_form
 
 
 def inference(image):
-
-    MODEL_PATH = "models/densenet201.pt"
+    MODEL_PATH = "models/final_model.pt"
     model_densenet = get_classifier()
     model_densenet.load_state_dict(torch.load(MODEL_PATH))
     model_densenet.eval()
