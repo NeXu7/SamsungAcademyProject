@@ -68,10 +68,10 @@ class RoiWorker:
         return predicts
 
     def predict(self, image):
-        # image = tf.imread(file_name)
         detections = self.predict_stardist(image)
         labels = self.predict_class(image, detections)
-        return detections, labels
+        json_form = self.create_json(detections['coord'], labels)
+        return json_form
 
     @staticmethod
     def resize_img(img, shape=56):
@@ -107,30 +107,18 @@ class RoiWorker:
             predict = self.softmax(predict).data.cpu().numpy()
             return int(np.argmax(predict.mean(0)))
 
-    # def create_json(self, detections, labels, offset):
-    #     ccd = {4: 16711680, 0: 255, 2: 16776960, 3: 16737280, 1: 6618880}
-    #     json_form = []
-    #     for label, detection in zip(labels, detections):
-    #         if label is not None:
-    #             if label == 4:
-    #                 label = 0
-    #             detection = np.rot90(detection, k=-1)
-    #             detection = detection + offset
-    #             detection = detection.tolist()
-    #             detection.append(detection[0])
-    #             geometry = {"type": "Polygon", "coordinates": [detection]}
-    #             measurements = [{"name": "Grade", "value": label}]
-    #             classification = {"name": label, "colorRGB": ccd[label]}
-    #             properties = {
-    #                 "object_type": "cell",
-    #                 "isLocked": False,
-    #                 "measurements": measurements,
-    #                 "classification": classification,
-    #             }
-    #             json_form.append(
-    #                 {"type": "Feature", "geometry": geometry, "properties": properties}
-    #             )
-    #     return json_form
+    @staticmethod
+    def create_json(detections, labels):
+        json_form = []
+        for label, detection in zip(labels, detections):
+            if label is not None:
+                if label != 4 or label != 0:
+                    detection = np.rot90(detection, k=-1)
+                    detection = detection.tolist()
+                    json_form.append({"label": label,
+                                      "detection": detection})
+
+        return json_form
 
 
 def inference(image):
