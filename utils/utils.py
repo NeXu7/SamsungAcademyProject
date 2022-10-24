@@ -73,7 +73,6 @@ class RoiWorker:
         labels = self.predict_class(image, detections)
         return detections, labels
 
-
     @staticmethod
     def resize_img(img, shape=56):
         img_w, img_h, _ = img.shape
@@ -136,11 +135,11 @@ class RoiWorker:
 
 def inference(image):
 
-    MODEL_PATH = 'models/densenet.121'
+    MODEL_PATH = "models/densenet.121"
     model_densenet = get_classifier()
     model_densenet.load_state_dict(torch.load(MODEL_PATH))
     model_densenet.eval()
-    model_stardist = StarDist2D.from_pretrained('2D_versatile_he')
+    model_stardist = StarDist2D.from_pretrained("2D_versatile_he")
     roi_worker = RoiWorker(model_stardist, model_densenet)
     predict = roi_worker.predict(image)
     return predict

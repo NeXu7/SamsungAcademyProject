@@ -3,11 +3,9 @@ import os
 import streamlit as st
 import cv2 as cv
 import numpy as np
-import skimage.io as io
+
 import json
 
-import seaborn as sns
-import matplotlib.pyplot as plt
 # from utils.utils import inference
 
 # from stqdm import stqdm
@@ -18,17 +16,21 @@ import matplotlib.pyplot as plt
 
 
 ccd = {4: 16711680, 0: 255, 2: (255, 153, 0), 3: (255, 0, 0), 1: (255, 255, 0)}
-st.sidebar.image('misc/LOGO.png', width=100)
+st.sidebar.image("misc/LOGO.png", width=100)
 st.sidebar.title("Cell classifier")
 
 # image = location.file_uploader(label="Регион интереса")
-image = st.file_uploader(label="Регион интереса")
+image = None
+if image is None:
+    image = st.file_uploader(label="Регион интереса")
 location = st.empty()
 with open("test_mask.json", "r") as f:
     masks = json.load(f)
 
 if image:
-    view = st.sidebar.checkbox("MASK")
+    model_select = st.sidebar.selectbox(
+        "ВАРИАНТЫ ПРОСМОТРА",
+        ["STANDARD", "MASK", "HEATMAP"])
     location.image(image)
     image = np.fromstring(image.getvalue(), np.uint8)
     image = cv.imdecode(image, cv.IMREAD_COLOR)
@@ -41,34 +43,40 @@ if image:
         mask = np.array([mask], dtype=np.int64)
         cv.drawContours(image_mask, mask, -1, ccd[label], -1)
         x, y, w, h = cv.boundingRect(mask)
-        blur[y+h//2, x + w // 2] = label
-    if view:
-        location.image(cv.addWeighted(image, 0.9, image_mask, 0.5, 0.0))
-    else:
-        location.image(image)
+        blur[y + h // 2, x + w // 2] = label
 
     blur_rendered = blur.copy()
     for i in range(100):
         blur_rendered += (blur + blur_rendered) / 2
         blur_rendered = cv.GaussianBlur(blur_rendered, (15, 15), 3, cv.BORDER_DEFAULT)
 
+    if model_select == "MASK":
+        location.image(cv.addWeighted(image, 0.9, image_mask, 0.5, 0.0))
+
+    elif model_select == "HEATMAP":
+        blur_rendered *= 255 / blur_rendered.max((0, 1))
+        blur_rendered = cv.applyColorMap(blur_rendered.astype(np.uint8), cv.COLORMAP_JET)
+        location.image(cv.addWeighted(image, 0.9, blur_rendered, 0.9, 0.0))
+    else:
+        location.image(image)
+
+
 
     #
-    blur_rendered *= 255 / blur_rendered.max((0, 1))
-    blur_rendered = cv.applyColorMap(blur_rendered.astype(np.uint8), cv.COLORMAP_JET)
+    #
 
     #
     # fig, ax = plt.subplots()
     # plt.imshow(blur_rendered, cmap="hot")
     # st.write(fig)
-
-    st.image(cv.addWeighted(image, 0.9, blur_rendered, 0.9, 0.0))
+    #
+    # st.image(cv.addWeighted(image, 0.9, blur_rendered, 0.9, 0.0))
 
 st.button("Re-run")
 
 #     print(inference(image))
 
-    # print(type(cv.()))
+# print(type(cv.()))
 # model_select = st.selectbox(
 #     "Choose model architecture:",
 #     ["", "densenet121", "densenet201", "efficientnet_b0"]
@@ -121,4 +129,3 @@ st.button("Re-run")
 #                           result.argmax(0)], columns=['file_name', 'predict'])
 #         # elif download_prob:
 #         #     st.download_button("Download result", result)
-
