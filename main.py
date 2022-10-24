@@ -6,7 +6,7 @@ import numpy as np
 
 import json
 
-# from utils.utils import inference
+from utils.utils import inference
 
 # from stqdm import stqdm
 # import pandas as pd
@@ -24,17 +24,19 @@ image = None
 if image is None:
     image = st.file_uploader(label="Регион интереса")
 location = st.empty()
-with open("test_mask.json", "r") as f:
-    masks = json.load(f)
+# with open("test_mask.json", "r") as f:
+#     masks = json.load(f)
 
 if image:
     model_select = st.sidebar.selectbox(
-        "ВАРИАНТЫ ПРОСМОТРА",
-        ["STANDARD", "MASK", "HEATMAP"])
+        "ВАРИАНТЫ ПРОСМОТРА", ["STANDARD", "MASK", "HEATMAP"]
+    )
     location.image(image)
+
     image = np.fromstring(image.getvalue(), np.uint8)
     image = cv.imdecode(image, cv.IMREAD_COLOR)
     image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+    masks = inference(image)
     image_mask = np.zeros_like(image)
     blur = np.zeros(image_mask.shape[:2])
     for detection in masks:
@@ -55,12 +57,12 @@ if image:
 
     elif model_select == "HEATMAP":
         blur_rendered *= 255 / blur_rendered.max((0, 1))
-        blur_rendered = cv.applyColorMap(blur_rendered.astype(np.uint8), cv.COLORMAP_JET)
+        blur_rendered = cv.applyColorMap(
+            blur_rendered.astype(np.uint8), cv.COLORMAP_JET
+        )
         location.image(cv.addWeighted(image, 0.9, blur_rendered, 0.9, 0.0))
     else:
         location.image(image)
-
-
 
     #
     #

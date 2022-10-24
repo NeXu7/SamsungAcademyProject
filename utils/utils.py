@@ -4,10 +4,11 @@ from torchvision import models, transforms
 import numpy as np
 from torchvision.transforms.functional import rotate
 import cv2 as cv
+from csbdeep.utils import normalize
 
 
 def get_classifier():
-    model = models.densenet121(weights=None)
+    model = models.densenet201(weights=None)
     for param in model.parameters():
         param.requires_grad = False
     model.classifier = torch.nn.Sequential(
@@ -23,55 +24,56 @@ def get_detector():
     return model_stardist
 
 
-class RoiWorker():
+class RoiWorker:
     def __init__(self, model_stardist, model_classifier):
         self.model_stardist = model_stardist
         self.model_classifier = model_classifier
         self.softmax = torch.nn.Softmax(dim=1)
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         mean = [0.65, 0.49, 0.64]
         std = [0.16, 0.20, 0.20]
-        self.image_transforms = transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize((112, 112)),
-            transforms.Normalize(mean, std)
-        ])
+        self.image_transforms = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Resize((112, 112)),
+                transforms.Normalize(mean, std),
+            ]
+        )
         self.model_classifier.to(self.device)
 
     def predict_stardist(self, image):
-        print('Detections predicted')
+        print("Detections predicted")
         _, he_2 = self.model_stardist.predict_instances(normalize(image))
         return he_2
 
     def predict_class(self, image, detections):
         predicts = []
-        for coord in tqdm(detections["coord"]):
-            coord = np.rot90(coord, k=-1).astype(np.int64)
-            x, y, w, h = np.array(cv.boundingRect(coord)) + (-5, -5, 10, 10)
-            small_image = image[y:y + h, x:x + w]
-            small_mask = np.zeros_like(small_image)[:, :, 0].astype(np.uint8)
-            param = np.array(small_mask.shape) // 2
-            cv.circle(small_mask, param, min(param + 1), 255, -1)
-            small_image[small_mask == 0] = [0, 0, 0]
-            small_image = self.resize_img(small_image)
-            if small_image is not None:
+        for coord in detections["coord"]:
+            try:
+                coord = np.rot90(coord, k=-1).astype(np.int64)
+                x, y, w, h = np.array(cv.boundingRect(coord)) + (-5, -5, 10, 10)
+                small_image = image[y : y + h, x : x + w].copy()
+                small_mask = np.zeros_like(small_image)[:, :, 0].astype(np.uint8)
+                param = np.array(small_mask.shape) // 2
+                cv.circle(small_mask, param, min(param + 1), 255, -1)
+                small_image[small_mask == 0] = [0, 0, 0]
+                small_image = self.resize_img(small_image)
+                # if small_image is not None:
                 small_image = self.image_transforms(small_image)
                 images = [rotate(small_image, angle=i * 90) for i in range(2)]
                 images = [torch.unsqueeze(img, dim=0) for img in images]
                 images = torch.cat(images)
                 predict = self.densenet_predict(images)
                 predicts.append(predict)
-            else:
+            except:
                 predicts.append(None)
         return predicts
 
-    def predict(self, file_name):
+    def predict(self, image):
         detections = self.predict_stardist(image)
         labels = self.predict_class(image, detections)
         json_form = self.create_json(detections['coord'], labels)
-        file_name, _ = os.path.splitext(file_name)
-        with open(f"{file_name}.json", 'w') as f:
-            json.dump(json_form, f)
+        return json_form
 
     @staticmethod
     def resize_img(img, shape=56):
@@ -88,7 +90,16 @@ class RoiWorker():
         elif img_w > shape:
             vert_crop = (img_w - shape) // 2
             img = img[vert_crop:-vert_crop]
-        img = cv.copyMakeBorder(img, vert_add, vert_add, side_add, side_add, cv.BORDER_CONSTANT, None, [0, 0, 0])
+        img = cv.copyMakeBorder(
+            img,
+            vert_add,
+            vert_add,
+            side_add,
+            side_add,
+            cv.BORDER_CONSTANT,
+            None,
+            [0, 0, 0],
+        )
         return img
 
     def densenet_predict(self, batch):
@@ -98,8 +109,8 @@ class RoiWorker():
             predict = self.softmax(predict).data.cpu().numpy()
             return int(np.argmax(predict.mean(0)))
 
-    def create_json(self, detections, labels):
-        ccd = {4: 16711680, 0: 255, 2: 16776960, 3: 16737280, 1: 6618880}
+    @staticmethod
+    def create_json(detections, labels):
         json_form = []
         for label, detection in zip(labels, detections):
             if label is not None:
@@ -114,7 +125,7 @@ class RoiWorker():
 
 def inference(image):
 
-    MODEL_PATH = "models/densenet.121"
+    MODEL_PATH = "models/densenet201.pt"
     model_densenet = get_classifier()
     model_densenet.load_state_dict(torch.load(MODEL_PATH))
     model_densenet.eval()
