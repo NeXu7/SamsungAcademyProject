@@ -2,7 +2,7 @@
 
 ### About the purpose
 This project was created within the framework of IT.School
-Academy by Samsung on Sechenov University dataset of kidney cancer
+Academy by Samsung and based on Sechenov University dataset of kidney cancer cell classification
 
 ### How does it work
 1) Program takes the json file with cells boundaries created by QuPath
