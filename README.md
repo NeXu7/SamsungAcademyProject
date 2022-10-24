@@ -10,6 +10,6 @@ Academy by Samsung and based on Sechenov University dataset of kidney cancer cel
 3) Then model create cell wise prediction and create json file with objects to import in QuPath
 
 ### How to use:
-to test the program type 
-"streamlit run main.py"
-when being in root dir
+1) install all requirements
+2) streamlit run main.py
+3) to test use test_image.tif or any image in test_images folder

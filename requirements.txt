@@ -1,0 +1,9 @@
+torch~=1.12.1+cu116
+numpy~=1.23.3
+opencv-python~=4.6.0.66
+stardist~=0.8.3
+torchvision~=0.13.1+cu116
+csbdeep~=0.7.2
+pandas~=1.5.1
+streamlit~=1.13.0
+matplotlib~=3.6.1
