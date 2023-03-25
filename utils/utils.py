@@ -43,7 +43,7 @@ class RoiWorker:
 
     def predict_stardist(self, image):
         print("Detections predicted")
-        _, he_2 = self.model_stardist.predict_instances(normalize(image))
+        _, he_2 = self.model_stardist.predict_instances(normalize_he(image))
         return he_2
 
     def predict_class(self, image, detections):
@@ -131,3 +131,53 @@ def inference(image):
     roi_worker = RoiWorker(model_stardist, model_densenet)
     predict = roi_worker.predict(image)
     return predict
+
+def normalize_he(img, alpha=1, beta=0.15, I0=240):
+    h, w, _ = img.shape
+
+    c_max_ref = np.array([1.9705, 1.0308])
+
+    he_ref = np.array([[0.5626, 0.2159],
+                       [0.7201, 0.8012],
+                       [0.4062, 0.5581]])
+
+    od = img.reshape(-1, 3).astype('float64')
+    od = -np.log((od + 1) / I0)
+
+    od_hat = od[~np.any(od<beta, axis=1)]
+
+    _, eigvec = np.linalg.eigh(np.cov(od_hat.T))
+
+    That = od_hat @ eigvec[:, 1:3]
+
+    phi = np.arctan2(That[:, 1], That[:, 0])
+
+    minPhi = np.percentile(phi, alpha)
+    maxPhi = np.percentile(phi, 100-alpha)
+
+    vMin = eigvec[:, 1:3] @ np.array([(np.cos(minPhi),
+                                      np.sin(minPhi))]).T
+    vMax = eigvec[:, 1:3] @ np.array([(np.cos(maxPhi),
+                                      np.sin(maxPhi))]).T
+
+    if vMin[0] < vMax[0]:
+        he = np.array([vMax[:,0], vMin[:,0]]).T
+    else:
+        he = np.array([vMin[:,0], vMax[:,0]]).T
+
+    y = od.T
+
+    c = np.linalg.lstsq(he, y, rcond=None)[0]
+
+    c_max = np.array([np.percentile(c[0,:], 99),
+                      np.percentile(c[1,:], 99)])
+    tmp = c_max / c_max_ref
+    c /= tmp[:, np.newaxis]
+
+    img_normed = I0 * np.exp(-he_ref @ c)
+    img_normed[img_normed > 255] = 255
+    img_normed = img_normed.T.reshape(h, w, 3)
+    img_normed = img_normed.astype('uint8')
+
+    return normalize(img_normed)
+
