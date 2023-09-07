@@ -1,8 +1,9 @@
-# Cell Classifier
+# Cell Classifier 
 
 ### About the purpose
 This project was created within the framework of IT.School
 Academy by Samsung and based on Sechenov University dataset of kidney cancer cell classification
+(this project is the winner of the contest)
 
 ### How does it work
 1) Program takes the json file with cells boundaries created by QuPath
